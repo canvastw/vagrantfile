@@ -1,0 +1,103 @@
+# -*- mode: ruby -*-
+# vi: set ft=ruby :
+NGINXVER="1.15.2"
+UPLOADVER="2.2"
+RTMPVER="1.2.1"
+ECHOVER="0.61"
+HEADERSMOREVER="0.33"
+Vagrant.configure("2") do |config|
+  config.vm.box = "ruby193"
+  config.vm.box_check_update = false
+  config.vm.network "forwarded_port", guest: 3000, host: 3000
+  # config.vm.synced_folder "../data", "/vagrant_data"
+  config.ssh.insert_key = true
+  config.vm.box_version = "20190609.0.0"
+  config.vm.provider "virtualbox" do |vb|
+    # Customize the amount of memory on the VM:
+    vb.memory = "2048"
+  end
+  $passenger_install_script = <<-SCRIPT
+    apt-get install -y curl unzip sudo libcurl4-openssl-dev
+    apt-get clean
+    cd /usr/src
+    # Downloading...
+    curl -fSL -o nginx.tar.gz "http://nginx.org/download/nginx-${NGINXVER}.tar.gz" \
+    && tar xvfz nginx.tar.gz -C /usr/src \
+    && rm nginx.tar.gz \
+    # upload-module
+    curl -fSL -o upload-module.zip "https://github.com/RubyClickAP/nginx-upload-module/archive/2.2.zip" \
+    && unzip upload-module.zip -d /usr/src \
+    && mv /usr/src/nginx-upload-module-* /usr/src/upload-module \
+    && rm upload-module.zip \
+    # rtmp-module
+    curl -fSL -o rtmp-module.zip "https://github.com/RubyClickAP/nginx-rtmp-module/archive/v1.2.1.zip" \
+    && unzip rtmp-module.zip -d /usr/src \
+    && mv /usr/src/nginx-rtmp-module-* /usr/src/rtmp-module \
+    && rm rtmp-module.zip \
+    # echo-module
+    curl -fSL -o echo-module.tar.gz "https://github.com/openresty/echo-nginx-module/archive/v0.61.tar.gz" \
+    && tar xvfz echo-module.tar.gz -C /usr/src \
+    && mv /usr/src/echo-nginx-module-* /usr/src/echo-module \
+    && rm echo-module.tar.gz \
+    # headers-more-module
+    curl -fSL -o headers-more-module.tar.gz "https://github.com/openresty/headers-more-nginx-module/archive/v0.33.tar.gz" \
+    && tar zxvf headers-more-module.tar.gz -C /usr/src \
+    && mv /usr/src/headers-more-nginx-module-* /usr/src/headers-more-module \
+    && rm headers-more-module.tar.gz \
+    && export PATH=/opt/rubies/ruby-1.9.3-p547/bin:$PATH \
+    && passenger-install-nginx-module --auto --languages=ruby --prefix=/opt/nginx --nginx-source-dir=/usr/src/nginx-${NGINXVER} --extra-configure-flags="--with-http_secure_link_module --add-module='/usr/src/upload-module' --add-module='/usr/src/rtmp-module' --add-module='/usr/src/echo-module' --add-module='/usr/src/headers-more-module' "
+    # mv /opt/nginx/conf/nginx.conf /opt/nginx/conf/nginx.conf.bk
+    echo "*** Nginx(Passenger) and module install done."
+SCRIPT
+
+  $clean_script = <<-SCRIPT
+    sudo apt-get clean
+      sudo dd if=/dev/zero of=/EMPTY bs=1M
+      sudo rm -f /EMPTY
+      cat /dev/null > ~/.bash_history && history -c && exit
+SCRIPT
+
+  config.vm.provision "shell", inline: <<-SHELL
+    sudo apt-get update -y
+    #echo "Asia/Taipei" | tee /etc/timezone && dpkg-reconfigure --frontend noninteractive tzdata
+    #sudo timedatectl set-timezone Asia/Taipei
+    #apt-get clean #&& rm -rf /var/lib/apt/lists/*
+    export GEM_HOME="/opt/rubies/ruby-1.9.3-p547"
+    export PATH="${GEM_HOME}/bin:$PATH"
+    ruby -v
+  SHELL
+
+  $componet_install_script = <<-SCRIPT
+    export PATH=/opt/rubies/ruby-1.9.3-p547/bin:$PATH
+    cd /usr/src
+    gem install --no-ri --no-rdoc monk
+    #Ruby-Passenger
+    gem install --no-ri --no-rdoc bundler -v 1.17.3
+    gem install --no-ri --no-rdoc rack -v 1.6.11
+    gem install --no-ri --no-rdoc passenger
+    #Other gem
+    gem install --no-ri --no-rdoc activesupport -v 4.2.6
+    gem install --no-ri --no-rdoc mime-types -v 2.99.3
+    gem install --no-ri --no-rdoc unix-crypt -v 1.3.0
+    #mono_logger
+    gem install mono_logger --no-ri --no-rdoc  -v 1.1.0
+    gem install multi_json --no-ri --no-rdoc  -v 1.11.2
+    gem install tilt  --no-ri --no-rdoc -v 1.4.1
+    echo "*** Gem successfully installed."
+SCRIPT
+
+  config.vm.define "ruby193passenger" do|ruby193passenger|
+    ruby193passenger.vm.provision :shell, inline: <<-SHELL
+      echo "Current user: [`whoami`], deal with Gem..."
+      sudo /bin/bash << 'SCRIPT'
+        #echo "Current user: [`whoami`], deal with Yakitori..."
+SCRIPT
+      echo "*** vagrant package --output passenger-1.9-xenial.box"
+      echo "*** vagrant box add ruby193/passenger-xenial passenger-1.9-xenial.box"
+      echo "*** After that, check %USERPROFILE%/.vagrant.d/boxes , search your box."
+    SHELL
+    ruby193passenger.vm.provision :shell, privileged: true, inline: $componet_install_script
+    ruby193passenger.vm.provision :shell, privileged: true, inline: $passenger_install_script
+    ruby193passenger.vm.provision :shell, privileged: false, inline: $clean_script
+  end
+end

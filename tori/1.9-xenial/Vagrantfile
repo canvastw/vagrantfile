@@ -1,0 +1,61 @@
+# -*- mode: ruby -*-
+# vi: set ft=ruby :
+APP_ROOT_PATH="/opt/yakitory"
+Vagrant.configure("2") do |config|
+  config.vm.box = "ruby193/passenger-xenial"
+  # config.vm.box_check_update = false
+  config.vm.network "forwarded_port", guest: 3000, host: 3000
+  # config.vm.network "private_network", ip: "192.168.33.10"
+  # config.vm.network "public_network"
+  # config.vm.synced_folder "../data", "/vagrant_data"
+  config.vm.provider "virtualbox" do |vb|
+    vb.memory = "2048"
+  end
+  config.vm.provision "shell", inline: <<-SHELL
+    sudo apt-get update -y
+    #echo "Asia/Taipei" | tee /etc/timezone && dpkg-reconfigure --frontend noninteractive tzdata
+    sudo timedatectl set-timezone Asia/Taipei
+    sudo apt-get install -y ffmpeg redis-server
+    sudo update-rc.d redis-server enable
+    #apt-get clean #&& rm -rf /var/lib/apt/lists/*
+    export GEM_HOME="/opt/rubies/ruby-1.9.3-p547"
+    export PATH="${GEM_HOME}/bin:$PATH"
+    ruby -v
+  SHELL
+
+  $svn_checkout_script = <<-SCRIPT
+    #Install SVN client from official repository
+    echo "deb http://opensource.wandisco.com/ubuntu `lsb_release -cs` svn19" >> /etc/apt/sources.list.d/subversion19.list
+    curl -sS http://opensource.wandisco.com/wandisco-debian.gpg | apt-key add -
+    apt-get update && apt-get install -y subversion
+    svn co --non-interactive --no-auth-cache http://192.168.50.164/svn/yakitory/branches/security2018 /opt/yakitory
+    chown -R vagrant /opt/yakitory
+    sed -i 's/Toriredis/localhost/g' /opt/yakitory/config/settings.yml
+SCRIPT
+  $nginx_configuration_script = <<-SCRIPT
+    export GEM_HOME="/opt/rubies/ruby-1.9.3-p547"
+    export PATH="${GEM_HOME}/bin:$PATH"
+    cp /vagrant/entrypoint /usr/src
+    chmod +x /usr/src/entrypoint
+    cp /vagrant/nginx.conf.erb /opt/nginx/conf
+    /usr/src/entrypoint
+    chown -R vagrant /opt/nginx/
+    cd /opt/yakitory
+    #/opt/nginx/sbin/nginx -c /opt/nginx/conf/nginx.conf && QUEUES=* rake resque:work
+    # mvideo2
+    curl -fSL -o /etc/init.d/mvideo2 "https://gist.githubusercontent.com/RubyClickAP/8b814c7f8a71c0f428baa74ac6fe3426/raw/18938bda11b361950493bbc9ed73f58801160515/etc-init.d-mvideo2-ub" \
+    && chmod +x /etc/init.d/mvideo2
+SCRIPT
+
+  config.vm.define "tory2" do|tory2|
+    tory2.vm.provision :shell, inline: <<-SHELL
+      echo "Current user: [`whoami`], deal with Yakitori..."
+      sudo /bin/bash << 'SCRIPT'
+        echo "Current user: [`whoami`], deal with Yakitori..."
+        #rm /opt/nginx/conf/nginx.conf
+SCRIPT
+    SHELL
+    tory2.vm.provision :shell, privileged: true, inline: $svn_checkout_script
+    tory2.vm.provision :shell, privileged: true, inline: $nginx_configuration_script
+  end
+end
