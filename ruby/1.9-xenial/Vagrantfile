@@ -1,7 +1,7 @@
 # -*- mode: ruby -*-
 # vi: set ft=ruby :
-RUBY_MAJOR="1.9"
-RUBY_VERSION="1.9.3-p547"
+RUBYMAJOR="1.9"
+RUBYVER="1.9.3-p547"
 Vagrant.configure("2") do |config|
   config.vm.box = "ubuntu/xenial64"
   # config.vm.box_check_update = false
@@ -14,13 +14,13 @@ Vagrant.configure("2") do |config|
   end
 
   config.vm.provision "shell", inline: <<-SHELL
-    sudo apt-get update
-    sudo apt-get install -y psmisc git build-essential tzdata \
-    apt-transport-https ca-certificates software-properties-common language-pack-en locales \
-    libtool autoconf libtcmalloc-minimal4
+    sudo apt-get update -y
+    sudo apt-get install -y curl git sudo \
+    ca-certificates git build-essential libtool autoconf libtcmalloc-minimal4 libcurl4-openssl-dev \
+    psmisc tzdata apt-transport-https software-properties-common language-pack-en locales \
+    #libtool autoconf #libtcmalloc-minimal4
     #echo "Asia/Taipei" | tee /etc/timezone && dpkg-reconfigure --frontend noninteractive tzdata
     sudo timedatectl set-timezone Asia/Taipei
-    apt-get clean #&& rm -rf /var/lib/apt/lists/*
     export GEM_HOME="/opt/rubies/ruby-1.9.3-p547"
 
     mkdir /usr/src
@@ -54,22 +54,24 @@ Vagrant.configure("2") do |config|
     gem install multi_json --no-ri --no-rdoc  -v 1.11.2
     gem install tilt  --no-ri --no-rdoc -v 1.4.1
 SCRIPT
-
+  $clean_script = <<-SCRIPT
+    sudo apt-get clean
+    sudo dd if=/dev/zero of=/EMPTY bs=1M
+    sudo rm -f /EMPTY
+    cat /dev/null > ~/.bash_history && history -c && exit
+    echo "*** vagrant package --output ruby193.box"
+    echo "*** vagrant box add ruby193 ruby193.box"
+SCRIPT
   config.vm.define "ruby193" do|ruby193|
     ruby193.vm.provision :shell, inline: <<-SHELL
-      #echo "Current user: [`whoami`], deal with Gem..."
+      #echo "Current user: [`whoami`], Ruby version is `ruby -v`..."
       sudo /bin/bash << 'SCRIPT'
-        echo "Current user: [`whoami`], deal with SUDO script..."
+        #echo "Current user: [`whoami`], Ruby version is `ruby -v`..."
         echo "*** done."
 SCRIPT
-      sudo apt-get clean
-      sudo dd if=/dev/zero of=/EMPTY bs=1M
-      sudo rm -f /EMPTY
-      cat /dev/null > ~/.bash_history && history -c && exit
       echo "*** vagrant package --output ruby193.box"
       echo "*** vagrant box add ruby193 ruby193.box"
-      cd /usr/src/app
     SHELL
-    #ruby193.vm.provision :shell, privileged: true, inline: $componet_install_script
+    ruby193.vm.provision :shell, privileged: true, inline: $clean_script
   end
 end

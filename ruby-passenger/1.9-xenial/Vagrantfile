@@ -17,11 +17,15 @@ Vagrant.configure("2") do |config|
     vb.memory = "2048"
   end
   $passenger_install_script = <<-SCRIPT
+    export GEM_HOME="/opt/rubies/ruby-1.9.3-p547"
+    export PATH="${GEM_HOME}/bin:$PATH"
+    #export PATH=/opt/rubies/ruby-1.9.3-p547/bin:$PATH
+    echo "Current user: [`whoami`], Ruby version: `ruby -v`, GEM_HOME: `echo $GEM_HOME`..."
     apt-get install -y curl unzip sudo libcurl4-openssl-dev
     apt-get clean
     cd /usr/src
     # Downloading...
-    curl -fSL -o nginx.tar.gz "http://nginx.org/download/nginx-${NGINXVER}.tar.gz" \
+    curl -fSL -o nginx.tar.gz "http://nginx.org/download/nginx-1.15.2.tar.gz" \
     && tar xvfz nginx.tar.gz -C /usr/src \
     && rm nginx.tar.gz \
     # upload-module
@@ -45,9 +49,10 @@ Vagrant.configure("2") do |config|
     && mv /usr/src/headers-more-nginx-module-* /usr/src/headers-more-module \
     && rm headers-more-module.tar.gz \
     && export PATH=/opt/rubies/ruby-1.9.3-p547/bin:$PATH \
-    && passenger-install-nginx-module --auto --languages=ruby --prefix=/opt/nginx --nginx-source-dir=/usr/src/nginx-${NGINXVER} --extra-configure-flags="--with-http_secure_link_module --add-module='/usr/src/upload-module' --add-module='/usr/src/rtmp-module' --add-module='/usr/src/echo-module' --add-module='/usr/src/headers-more-module' "
+    && passenger-install-nginx-module --auto --languages=ruby --prefix=/opt/nginx --nginx-source-dir=/usr/src/nginx-1.15.2 --extra-configure-flags="--with-http_secure_link_module --add-module='/usr/src/upload-module' --add-module='/usr/src/rtmp-module' --add-module='/usr/src/echo-module' --add-module='/usr/src/headers-more-module' "
     # mv /opt/nginx/conf/nginx.conf /opt/nginx/conf/nginx.conf.bk
-    echo "*** Nginx(Passenger) and module install done."
+    echo "*** Nginx(Passenger) successfully installed."
+    echo "*** Nginx start: /opt/nginx/sbin/nginx -c /opt/nginx/conf/nginx.conf"
 SCRIPT
 
   $clean_script = <<-SCRIPT
@@ -68,18 +73,21 @@ SCRIPT
   SHELL
 
   $componet_install_script = <<-SCRIPT
-    export PATH=/opt/rubies/ruby-1.9.3-p547/bin:$PATH
+    export GEM_HOME="/opt/rubies/ruby-1.9.3-p547"
+    export PATH="${GEM_HOME}/bin:$PATH"
+    #export PATH=/opt/rubies/ruby-1.9.3-p547/bin:$PATH
+    echo "Current user: [`whoami`], Ruby version: `ruby -v`, GEM_HOME: `echo $GEM_HOME`..."
     cd /usr/src
     gem install --no-ri --no-rdoc monk
-    #Ruby-Passenger
+    # Ruby-Passenger
     gem install --no-ri --no-rdoc bundler -v 1.17.3
     gem install --no-ri --no-rdoc rack -v 1.6.11
     gem install --no-ri --no-rdoc passenger
-    #Other gem
+    # Other gem
     gem install --no-ri --no-rdoc activesupport -v 4.2.6
     gem install --no-ri --no-rdoc mime-types -v 2.99.3
     gem install --no-ri --no-rdoc unix-crypt -v 1.3.0
-    #mono_logger
+    # mono_logger
     gem install mono_logger --no-ri --no-rdoc  -v 1.1.0
     gem install multi_json --no-ri --no-rdoc  -v 1.11.2
     gem install tilt  --no-ri --no-rdoc -v 1.4.1
@@ -88,13 +96,12 @@ SCRIPT
 
   config.vm.define "ruby193passenger" do|ruby193passenger|
     ruby193passenger.vm.provision :shell, inline: <<-SHELL
-      echo "Current user: [`whoami`], deal with Gem..."
+      echo "Current user: [`whoami`], GEM_HOME: `echo $GEM_HOME`..."
       sudo /bin/bash << 'SCRIPT'
         #echo "Current user: [`whoami`], deal with Yakitori..."
 SCRIPT
-      echo "*** vagrant package --output passenger-1.9-xenial.box"
-      echo "*** vagrant box add ruby193/passenger-xenial passenger-1.9-xenial.box"
-      echo "*** After that, check %USERPROFILE%/.vagrant.d/boxes , search your box."
+      #echo "*** vagrant package --output passenger-1.9-xenial.box"
+      #echo "*** vagrant box add passenger-1.9-xenial passenger-1.9-xenial.box"
     SHELL
     ruby193passenger.vm.provision :shell, privileged: true, inline: $componet_install_script
     ruby193passenger.vm.provision :shell, privileged: true, inline: $passenger_install_script
