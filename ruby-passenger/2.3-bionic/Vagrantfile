@@ -1,0 +1,144 @@
+# -*- mode: ruby -*-
+# vi: set ft=ruby :
+
+NGINXVER="1.18.0"
+UPLOADVER="2.3.0"
+RTMPVER="1.2.1"
+ECHOVER="0.62"
+HEADERSMOREVER="0.33"
+Vagrant.configure("2") do |config|
+  config.vm.box = "jkruby/2.3-bionic"
+  #config.vm.box_version = "20190609.0.0"
+  config.vm.box_check_update = false
+  config.ssh.insert_key = false
+
+  config.vm.network "forwarded_port", guest: 4567, host: 4567
+  config.vm.network "forwarded_port", guest: 9292, host: 9292
+  
+
+  config.vm.provider "virtualbox" do |vb|
+    # Customize the amount of memory on the VM:
+    vb.cpus = 4
+    vb.memory = "4096"
+    vb.customize ["modifyvm", :id, "--natdnshostresolver1", "on"]
+  end
+  $passenger_script = <<-SCRIPT
+    # . /etc/profile.d/rbenv.sh
+    echo "Current user: [`whoami`], Ruby version: `ruby -v`, GEM_HOME: `echo $GEM_HOME`..."
+
+    cd /usr/src
+    curl --silent -fSL -o nginx.tar.gz "http://nginx.org/download/nginx-1.18.0.tar.gz"
+    tar xfz nginx.tar.gz -C /usr/src
+    rm nginx.tar.gz
+# upload-module
+    curl --silent -fSL -o upload-module.zip "https://codeload.github.com/fdintino/nginx-upload-module/zip/2.3.0"
+    unzip upload-module.zip -d /usr/src
+    mv /usr/src/nginx-upload-module-* /usr/src/upload-module
+    rm upload-module.zip
+# rtmp-module
+    curl --silent -fSL -o rtmp-module.zip "https://github.com/RubyClickAP/nginx-rtmp-module/archive/v1.2.1.zip"
+    unzip rtmp-module.zip -d /usr/src
+    mv /usr/src/nginx-rtmp-module-* /usr/src/rtmp-module
+    rm rtmp-module.zip
+# echo-module
+    curl --silent -fSL -o echo-module.tar.gz "https://github.com/openresty/echo-nginx-module/archive/v0.62.tar.gz"
+    tar xfz echo-module.tar.gz -C /usr/src
+    mv /usr/src/echo-nginx-module-* /usr/src/echo-module
+    rm echo-module.tar.gz
+# headers-more-module
+    curl --silent -fSL -o headers-more-module.tar.gz "https://github.com/openresty/headers-more-nginx-module/archive/v0.33.tar.gz"
+    tar zxf headers-more-module.tar.gz -C /usr/src
+    mv /usr/src/headers-more-nginx-module-* /usr/src/headers-more-module
+    rm headers-more-module.tar.gz
+# Passenger-build
+    gem install --no-document passenger -v 6.0.7
+    passenger-install-nginx-module --auto --languages=ruby --prefix=/opt/nginx --nginx-source-dir=/usr/src/nginx-1.18.0 --extra-configure-flags="--with-http_secure_link_module --add-module='/usr/src/upload-module' --add-module='/usr/src/rtmp-module' --add-module='/usr/src/echo-module' --add-module='/usr/src/headers-more-module' " 
+# mvideo2
+    #curl -fSL -o /opt/nginx/conf/nginx.conf "https://gist.githubusercontent.com/RubyClickAP/45760ee9c11fab4a7e40371bd524b8b3/raw/6c62aa3ab5d76d12d23cb1fadab8b3315a273a82/mvideo2-conf"
+
+    echo "*** Nginx(Passenger) successfully installed."
+    echo "*** Nginx start: /opt/nginx/sbin/nginx -c /opt/nginx/conf/nginx.conf"
+SCRIPT
+  
+  $mvideo2_script = <<-SCRIPT
+    echo "Current user: [`whoami`], Ruby version: `ruby -v`, GEM_HOME: `echo $GEM_HOME`..."
+    mv /opt/nginx/conf/nginx.conf /opt/nginx/conf/nginx.conf.bk
+    cp /home/vagrant/nginx.conf.erb /opt/nginx/conf/nginx.conf.erb
+    sudo mkdir -p /opt/nginx/main.d
+    cp /home/vagrant/env.conf.erb /opt/nginx/main.d/env.conf.erb
+
+    for file in /opt/nginx/{,**/}*.erb; do
+      if [ -f "$file" ]; then
+        # don't overwrite an existing destination file
+        if [ ! -e "${file%.*}" ]; then
+          erb -T- "$file" > "${file%.*}"
+          echo "${file%.*}: generated."
+        else
+          >&2 echo "${file%.*}: SKIPPED! refusing to overwrite existing file."
+        fi
+      fi
+    done
+
+    wget -qO /etc/init.d/mvideo2 https://gist.githubusercontent.com/RubyClickAP/8b814c7f8a71c0f428baa74ac6fe3426/raw/18938bda11b361950493bbc9ed73f58801160515/etc-init.d-mvideo2-ub
+    chmod +x /etc/init.d/mvideo2
+    /usr/sbin/update-rc.d -f mvideo2 defaults
+SCRIPT
+
+
+  $clean_script = <<-SCRIPT
+    echo "Current user: [`whoami`]..."
+    sudo apt-get clean
+    sudo dd if=/dev/zero of=/EMPTY bs=1M
+    sudo rm -f /EMPTY
+    cat /dev/null > ~/.bash_history && history -c && exit
+SCRIPT
+
+  config.vm.provision "file", source: "nginx.conf.erb", destination: "$HOME/"
+  config.vm.provision "file", source: "env.conf.erb", destination: "$HOME/"
+  
+  config.vm.provision "shell", inline: <<-SHELL
+    apt-get update -q
+    apt-get install -qy --no-install-recommends curl unzip sudo 
+    apt-get install -qy --no-install-recommends libcurl4-openssl-dev
+    apt-get install -qy --no-install-recommends libssl-dev
+  SHELL
+
+  $gem_install_script = <<-SCRIPT
+    # . /etc/profile.d/rbenv.sh
+    echo "Current user: [`whoami`], Ruby version: `ruby -v`, GEM_HOME: `echo $GEM_HOME`..."
+
+    gem install bundler -v 2.2.4
+    gem install rack -v 2.2.3
+    gem install rack-protection -v 2.1.0
+    # Other gem
+    gem install activesupport -v 5.2.4.4
+    gem install mime-types -v 3.3.1
+    gem install unix-crypt -v 1.3.0
+    # for resque-1.27.4
+    gem install mono_logger -v 1.1.0
+    gem install multi_json -v 1.15.0
+    gem install tilt -v 2.0.10
+    # 3Jan2021, Because Multi-dependancy, so gem install insted dependencies
+    gem install ohm -v 3.1.1
+    gem install aasm -v 5.1.1
+    gem install rest-client -v 2.1.0
+    gem install unix-crypt -v 1.3.0
+
+    echo "*** Gem successfully installed."
+SCRIPT
+
+  config.vm.define "passenger238" do|passenger238|
+    passenger238.vm.provision :shell, inline: <<-SHELL
+      echo "Current user: [`whoami`], GEM_HOME: `echo $GEM_HOME`..."
+      sudo /bin/bash << 'SCRIPT'
+        #echo "Current user: [`whoami`], deal with Yakitori..."
+SCRIPT
+      #echo "*** vagrant package --output passenger-2.3-bionic.box"
+      #echo "*** vagrant box add jkpassenger/2.3-bionic passenger-2.3-bionic.box"
+    SHELL
+
+    passenger238.vm.provision :shell, privileged: true, inline: $passenger_script
+    passenger238.vm.provision :shell, privileged: true, inline: $mvideo2_script
+    passenger238.vm.provision :shell, privileged: false, inline: $clean_script
+  end
+end

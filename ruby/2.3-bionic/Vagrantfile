@@ -1,0 +1,85 @@
+# -*- mode: ruby -*-
+# vi: set ft=ruby :
+
+RUBYMAJOR="2.3"
+RUBYVER="2.3.8"
+BUNDLER_VERSION="2.2.4"
+RUBYGEMS_VERSION="3.2.4"
+Vagrant.configure("2") do |config|
+  config.vm.box = "ubuntu/bionic64"
+  config.vm.box_check_update = false
+  config.ssh.insert_key = false
+  
+  config.vm.network "forwarded_port", guest: 4567, host: 4567 # rack
+  config.vm.network "forwarded_port", guest: 9292, host: 9292 # sinatra
+
+  config.vm.provider "virtualbox" do |vb|
+    vb.gui = false
+    vb.cpus = 4
+    vb.memory = "4096"
+    vb.customize ["modifyvm", :id, "--natdnshostresolver1", "on"]
+    #vb.check_guest_additions = false
+		#vb.customize ["modifyvm", :id, "--natnet1", "10.10.10/24"]
+  end
+
+  config.vm.provision "shell", inline: <<-SHELL
+    apt-get update -q
+    apt-get install -y curl git tar wget unzip
+    # Install ruby build dependencies
+    apt-get install -f -y libcurl4-openssl-dev build-essential subversion autoconf libpq-dev libsqlite3-dev libmysqlclient-dev zlib1g-dev libssl-dev libreadline-dev libyaml-dev libxml2-dev libxslt-dev bison qt4-qmake libqtwebkit-dev libffi-dev net-tools
+    apt install -y libssl1.0-dev
+    timedatectl set-timezone Asia/Taipei
+  SHELL
+
+  $ruby2_install_script  = <<-SCRIPT
+    set -ex
+    cd /usr/local 
+    git clone git://github.com/RubyClickAP/rbenv.git rbenv
+    chgrp -R staff rbenv
+    #chmod -R g+rwxXs rbenv
+    chmod -R g+rxXs rbenv && \
+    { \
+      echo '# rbenv setup'; \
+      echo 'export RBENV_ROOT=/usr/local/rbenv'; \
+      echo 'export PATH="$RBENV_ROOT/bin:$PATH"'; \
+      echo 'eval "$(rbenv init -)"'; \
+    } >> /etc/profile.d/rbenv.sh \
+    \
+    && echo 'export PATH="~/.gem/ruby/#{RUBYVER}.0/bin:$PATH"' >> /etc/profile.d/rbenv.sh \
+    && chmod +x /etc/profile.d/rbenv.sh 
+
+    . /etc/profile.d/rbenv.sh
+    git clone https://github.com/sstephenson/ruby-build.git /tmp/ruby-build
+    cd /tmp/ruby-build && ./install.sh
+
+    rbenv install #{RUBYVER}
+    rbenv global #{RUBYVER}
+    rbenv rehash \
+    ruby -v
+    gem --version
+    gem update --no-document --system #{RUBYGEMS_VERSION} -q
+    gem install --no-document bundler -v #{BUNDLER_VERSION}
+SCRIPT
+
+  $clean_script = <<-SCRIPT
+    sudo apt-get clean
+    sudo dd if=/dev/zero of=/EMPTY bs=1M
+    sudo rm -f /EMPTY
+    cat /dev/null > ~/.bash_history && history -c && exit
+    echo "*** vagrant package --output ruby193.box"
+    echo "*** vagrant box add ruby193 ruby193.box"
+SCRIPT
+  config.vm.define "ruby2" do|ruby238|
+    ruby238.vm.provision :shell, inline: <<-SHELL
+      #echo "Current user: [`whoami`], Ruby version is `ruby -v`..."
+      sudo /bin/bash << 'SCRIPT'
+        #echo "Current user: [`whoami`], Ruby version is `ruby -v`..."
+        echo "*** done."
+SCRIPT
+      echo "*** vagrant package --output ruby-2.3-bionic.box"
+      echo "*** vagrant box add jkruby/2.3-bionic ruby-2.3-bionic.box"
+    SHELL
+    ruby238.vm.provision :shell, privileged: true, inline: $ruby2_install_script
+    ruby238.vm.provision :shell, privileged: true, inline: $clean_script
+  end
+end
