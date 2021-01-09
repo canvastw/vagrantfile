@@ -4,8 +4,9 @@
 APP_ROOT_PATH="/usr/src/app"
 
 Vagrant.configure("2") do |config|
+  # Jan2021, by Jack
   config.vm.box = "jkpassenger/2.3-bionic"
-  #config.vm.box_version = "20210109.0.0"
+  config.vm.box_version = "20210109.0.1"
   config.vm.box_check_update = false
   config.ssh.insert_key = false
   
@@ -16,7 +17,7 @@ Vagrant.configure("2") do |config|
   config.vm.provider "virtualbox" do |vb|
     vb.cpus = 4
     vb.memory = "4096"
-    vb.customize ["modifyvm", :id, "--natdnshostresolver1", "on"]
+    #vb.customize ["modifyvm", :id, "--natdnshostresolver1", "on"]
   end
 
   $svn_checkout_script = <<-SCRIPT
@@ -79,6 +80,6 @@ SCRIPT
     tory23bionic.vm.provision :shell, privileged: true, inline: $svn_checkout_script
     tory23bionic.vm.provision :shell, privileged: true, inline: $nginx_configuration_script
     tory23bionic.vm.provision :shell, privileged: true, inline: $gem_install_script
-    tory23bionic.vm.provision :shell, privileged: true, inline: $clean_script
+    #tory23bionic.vm.provision :shell, privileged: true, inline: $clean_script # The dev machine, no need clean?
   end
 end

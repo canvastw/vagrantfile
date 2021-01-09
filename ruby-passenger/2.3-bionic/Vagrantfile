@@ -9,7 +9,7 @@ HEADERSMOREVER="0.33"
 Vagrant.configure("2") do |config|
   # Jan2021, by Jack
   config.vm.box = "jkruby/2.3-bionic"
-  #config.vm.box_version = "20190609.0.0"
+  config.vm.box_version = "20210109.0.1"
   config.vm.box_check_update = false
   config.ssh.insert_key = false
 
@@ -18,9 +18,9 @@ Vagrant.configure("2") do |config|
   config.vm.network "forwarded_port", guest: 9292, host: 9292
 
   config.vm.provider "virtualbox" do |vb|
-    vb.cpus = 4
-    vb.memory = "4096"
-    vb.customize ["modifyvm", :id, "--natdnshostresolver1", "on"]
+    #vb.cpus = 2
+    vb.memory = "2048"
+    #vb.customize ["modifyvm", :id, "--natdnshostresolver1", "on"]
   end
   $passenger_script = <<-SCRIPT
     # . /etc/profile.d/rbenv.sh
@@ -148,8 +148,10 @@ SCRIPT
       sudo /bin/bash << 'SCRIPT'
         #echo "Current user: [`whoami`], deal with Yakitori..."
 SCRIPT
-      #echo "*** vagrant package --output passenger-2.3-bionic.box"
-      #echo "*** vagrant box add jkpassenger/2.3-bionic passenger-2.3-bionic.box"
+      #echo "*** vagrant package --output jk-passenger-2.3-bionic.box"
+      #echo "*** vagrant box add -f jkpassenger/2.3-bionic jk-passenger-2.3-bionic.box"
+      #echo "*** mv %userprofile%/.vagrant.d/boxes/jkpassenger-VAGRANTSLASH-2.3-bionic/0 %userprofile%/.vagrant.d/boxes/jkpassenger-VAGRANTSLASH-2.3-bionic/20210109.0.1"
+      #echo "***  vagrant box prune " # clean box
     SHELL
 
     passenger238.vm.provision :shell, privileged: true, inline: $passenger_script

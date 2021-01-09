@@ -15,9 +15,9 @@ Vagrant.configure("2") do |config|
 
   config.vm.provider "virtualbox" do |vb|
     vb.gui = false
-    vb.cpus = 4
-    vb.memory = "4096"
-    vb.customize ["modifyvm", :id, "--natdnshostresolver1", "on"]
+    vb.cpus = 2
+    vb.memory = "2048"
+    #vb.customize ["modifyvm", :id, "--natdnshostresolver1", "on"]
     #vb.check_guest_additions = false
 		#vb.customize ["modifyvm", :id, "--natnet1", "10.10.10/24"]
   end
@@ -25,9 +25,9 @@ Vagrant.configure("2") do |config|
   config.vm.provision "shell", inline: <<-SHELL
     apt-get update -q
     apt-get install -y curl git tar wget unzip
-    # Install ruby build dependencies
-    apt-get install -f -y libcurl4-openssl-dev build-essential subversion autoconf libpq-dev libsqlite3-dev libmysqlclient-dev zlib1g-dev libssl-dev libreadline-dev libyaml-dev libxml2-dev libxslt-dev bison qt4-qmake libqtwebkit-dev libffi-dev net-tools
-    apt install -y libssl1.0-dev
+    # Install ruby build dependencies # reduce libcurl4-openssl-dev libssl-dev
+    apt-get install -f -y build-essential subversion autoconf libpq-dev libsqlite3-dev libmysqlclient-dev zlib1g-dev  libreadline-dev libyaml-dev libxml2-dev libxslt-dev bison qt4-qmake libqtwebkit-dev libffi-dev net-tools
+    apt install -y libssl1.0-dev # for Ruby 2.3
     timedatectl set-timezone Asia/Taipei
   SHELL
 
@@ -76,8 +76,10 @@ SCRIPT
         #echo "Current user: [`whoami`], Ruby version is `ruby -v`..."
         echo "*** done."
 SCRIPT
-      echo "*** vagrant package --output ruby-2.3-bionic.box"
-      echo "*** vagrant box add jkruby/2.3-bionic ruby-2.3-bionic.box"
+      echo "*** vagrant package --output jk-ruby-2.3-bionic.box"
+      echo "*** vagrant box add jkruby/2.3-bionic jk-ruby-2.3-bionic.box"
+      echo "*** mv %userprofile%/.vagrant.d/boxes/jkruby-VAGRANTSLASH-2.3-bionic/0  %userprofile%/.vagrant.d/boxes/jkruby-VAGRANTSLASH-2.3-bionic/20210109.0.1"
+      #echo "***  vagrant box prune " # clean box
     SHELL
     ruby238.vm.provision :shell, privileged: true, inline: $ruby2_install_script
     ruby238.vm.provision :shell, privileged: true, inline: $clean_script
