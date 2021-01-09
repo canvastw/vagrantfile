@@ -1,0 +1,84 @@
+# -*- mode: ruby -*-
+# vi: set ft=ruby :
+
+APP_ROOT_PATH="/usr/src/app"
+
+Vagrant.configure("2") do |config|
+  config.vm.box = "jkpassenger/2.3-bionic"
+  #config.vm.box_version = "20210109.0.0"
+  config.vm.box_check_update = false
+  config.ssh.insert_key = false
+  
+  config.vm.network "forwarded_port", guest: 80, host: 80
+  config.vm.network "forwarded_port", guest: 4567, host: 4567
+  config.vm.network "forwarded_port", guest: 9292, host: 9292
+
+  config.vm.provider "virtualbox" do |vb|
+    vb.cpus = 4
+    vb.memory = "4096"
+    vb.customize ["modifyvm", :id, "--natdnshostresolver1", "on"]
+  end
+
+  $svn_checkout_script = <<-SCRIPT
+    echo "Current user: [`whoami`], Install SVN client from official repository"
+
+    echo "deb http://opensource.wandisco.com/ubuntu `lsb_release -cs` svn19" >> /etc/apt/sources.list.d/subversion19.list
+    curl -sS http://opensource.wandisco.com/wandisco-debian.gpg | apt-key add -
+    apt-get update && apt-get install -y subversion
+    svn co --non-interactive --no-auth-cache http://192.168.50.164/svn/yakitory/branches/security2018 /opt/yakitory
+    chown -R vagrant /opt/yakitory
+    sed -i 's/Toriredis/localhost/g' /opt/yakitory/config/settings.yml
+    echo "*** SVN client successfully installed and checkout!"
+SCRIPT
+  $nginx_configuration_script = <<-SCRIPT
+
+    export PASSENGERROOT=`passenger-config --root`
+    export RUBYBIN=`which ruby`
+
+    echo "Current user: [`whoami`], Ruby version: `ruby -v`, GEM_HOME: `echo $GEM_HOME`..."
+
+    mkdir -p /opt/nginx/server.d /opt/nginx/location.d
+    cp /home/vagrant/server.d/*       /opt/nginx/server.d/
+    cp /home/vagrant/location.d/*     /opt/nginx/location.d/
+
+    # cd /opt/yakitory
+    # /opt/nginx/sbin/nginx -c /opt/nginx/conf/nginx.conf && QUEUES=* rake resque:work
+
+    echo "*** Nginx configuation done."
+SCRIPT
+  $clean_script = <<-SCRIPT
+    echo "Current user: [`whoami`]..."
+    sudo apt-get clean && sudo rm -rf /var/lib/apt/lists/*
+    sudo dd if=/dev/zero of=/EMPTY bs=1M
+    sudo rm -f /EMPTY
+    cat /dev/null > ~/.bash_history && history -c && exit
+SCRIPT
+$gem_install_script = <<-SCRIPT
+    # . /etc/profile.d/rbenv.sh
+    echo "Current user: [`whoami`], Ruby version: `ruby -v`, GEM_HOME: `echo $GEM_HOME`..."
+
+    gem install dependencies -v 0.0.9
+SCRIPT
+
+  config.vm.provision "file", source: "entrypoint.sh", destination: "$HOME/"  
+  config.vm.provision "file", source: "location.d/default.conf", destination: "$HOME/location.d/"
+  config.vm.provision "file", source: "server.d/yakitory.conf", destination: "$HOME/server.d/"
+
+  config.vm.provision "shell", inline: <<-SHELL
+    sudo apt-get update -yq
+    sudo apt-get install -y redis-server
+    sudo update-rc.d redis-server enable
+
+    sudo timedatectl set-timezone Asia/Taipei
+  SHELL
+
+  config.vm.define "tory2" do|tory23bionic|
+    tory23bionic.vm.provision :shell, inline: <<-SHELL
+      #echo "Current user: [`whoami`], deal with Yakitori..."
+    SHELL
+    tory23bionic.vm.provision :shell, privileged: true, inline: $svn_checkout_script
+    tory23bionic.vm.provision :shell, privileged: true, inline: $nginx_configuration_script
+    tory23bionic.vm.provision :shell, privileged: true, inline: $gem_install_script
+    tory23bionic.vm.provision :shell, privileged: true, inline: $clean_script
+  end
+end
