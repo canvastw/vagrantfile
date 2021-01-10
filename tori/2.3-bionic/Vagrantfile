@@ -11,7 +11,6 @@ Vagrant.configure("2") do |config|
   config.ssh.insert_key = false
   
   config.vm.network "forwarded_port", guest: 80, host: 80
-  config.vm.network "forwarded_port", guest: 4567, host: 4567
   config.vm.network "forwarded_port", guest: 9292, host: 9292
 
   config.vm.provider "virtualbox" do |vb|
@@ -26,10 +25,10 @@ Vagrant.configure("2") do |config|
     echo "deb http://opensource.wandisco.com/ubuntu `lsb_release -cs` svn19" >> /etc/apt/sources.list.d/subversion19.list
     curl -sS http://opensource.wandisco.com/wandisco-debian.gpg | apt-key add -
     apt-get update && apt-get install -y subversion
-    svn co --non-interactive --no-auth-cache http://192.168.50.164/svn/yakitory/branches/security2018 /opt/yakitory
-    chown -R vagrant /opt/yakitory
-    sed -i 's/Toriredis/localhost/g' /opt/yakitory/config/settings.yml
-    echo "*** SVN client successfully installed and checkout!"
+    svn co --non-interactive --no-auth-cache http://192.168.50.164/svn/derberus/trunk /opt/derberus
+    chown -R vagrant /opt/derberus
+    sed -i 's/Toriredis/localhost/g' /opt/derberus/config/settings.yml
+    echo "*** SVN client installed and checkout!"
 SCRIPT
   $nginx_configuration_script = <<-SCRIPT
 
@@ -64,11 +63,15 @@ SCRIPT
   config.vm.provision "file", source: "entrypoint.sh", destination: "$HOME/"  
   config.vm.provision "file", source: "location.d/default.conf", destination: "$HOME/location.d/"
   config.vm.provision "file", source: "server.d/yakitory.conf", destination: "$HOME/server.d/"
+  # test file for Development
+  config.vm.provision "file", source: "test.docx", destination: "$HOME/"
+  config.vm.provision "file", source: "docker.docx", destination: "$HOME/"
+  config.vm.provision "file", source: "MassUsers.jpg", destination: "$HOME/"
 
   config.vm.provision "shell", inline: <<-SHELL
-    sudo apt-get update -yq
-    sudo apt-get install -y redis-server
-    sudo update-rc.d redis-server enable
+    sudo apt-get update -q
+    sudo apt-get install -yq redis unoconv
+    #sudo update-rc.d redis-server enable
 
     sudo timedatectl set-timezone Asia/Taipei
   SHELL
@@ -81,5 +84,6 @@ SCRIPT
     tory23bionic.vm.provision :shell, privileged: true, inline: $nginx_configuration_script
     tory23bionic.vm.provision :shell, privileged: true, inline: $gem_install_script
     #tory23bionic.vm.provision :shell, privileged: true, inline: $clean_script # The dev machine, no need clean?
+    tory23bionic.vm.provision :shell, path: "provision/unoconv.sh", privileged: true
   end
 end
