@@ -102,7 +102,7 @@ SCRIPT
   config.vm.provision "file", source: "nginx.conf.erb", destination: "$HOME/"
   config.vm.provision "file", source: "main.d/env.conf.erb", destination: "$HOME/main.d/"
   config.vm.provision "file", source: "location.d/default.conf", destination: "$HOME/location.d/"
-  config.vm.provision "file", source: "server.d/yakitory.conf", destination: "$HOME/server.d/"
+  #config.vm.provision "file", source: "server.d/yakitory.conf", destination: "$HOME/server.d/"
   
   
   config.vm.provision "shell", inline: <<-SHELL
@@ -112,9 +112,18 @@ SCRIPT
     apt-get install -qy --no-install-recommends libssl-dev
   SHELL
 
+  $vagrant_add_gemrc = <<-EOF
+  echo "Current user: [`whoami`], Ruby version: `ruby -v`..."
+  sudo -H -u vagrant /bin/bash << 'SCRIPT'
+    # echo 'gem: --user-install --no-rdoc --no-ri' > ~/.gemrc  
+    echo 'gem: --user-install --no-document' > ~/.gemrc
+SCRIPT
+echo "*** Generate add [gemrc] for vagrant is done."
+EOF
+
   $gem_install_script = <<-SCRIPT
-    # . /etc/profile.d/rbenv.sh
-    echo "Current user: [`whoami`], Ruby version: `ruby -v`, GEM_HOME: `echo $GEM_HOME`..."
+    echo "Current user: [`whoami`], Ruby version: `ruby -v`, Gem(s) start install..."
+    echo 'gem: --no-document' > ~/.gemrc
 
     gem install bundler -v 2.2.4
     gem install tilt -v 2.0.10
@@ -138,7 +147,6 @@ SCRIPT
     # 3Jan2021, Because Multi-dependancy, so gem install insted dependencies
     gem install aasm -v 5.1.1
     
-
     echo "*** Gem successfully installed."
 SCRIPT
 
@@ -156,6 +164,7 @@ SCRIPT
 
     passenger238.vm.provision :shell, privileged: true, inline: $passenger_script
     passenger238.vm.provision :shell, privileged: true, inline: $mvideo2_script
+    passenger238.vm.provision :shell, privileged: false, inline: $vagrant_add_gemrc
     passenger238.vm.provision :shell, privileged: true, inline: $gem_install_script
     passenger238.vm.provision :shell, privileged: true, inline: $clean_script
   end

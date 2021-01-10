@@ -61,6 +61,15 @@ Vagrant.configure("2") do |config|
     gem install --no-document bundler -v #{BUNDLER_VERSION}
 SCRIPT
 
+  $vagrant_add_gemrc = <<-EOF
+    echo "Current user: [`whoami`], Ruby version: `ruby -v`..."
+    sudo -H -u vagrant /bin/bash << 'SCRIPT'
+      # echo 'gem: --user-install --no-rdoc --no-ri' > ~/.gemrc  
+      echo 'gem: --user-install --no-document' > ~/.gemrc
+SCRIPT
+  echo "*** Generate add [gemrc] for vagrant is done."
+EOF
+
   $clean_script = <<-SCRIPT
     sudo apt-get clean
     sudo dd if=/dev/zero of=/EMPTY bs=1M
@@ -82,6 +91,7 @@ SCRIPT
       #echo "***  vagrant box prune " # clean box
     SHELL
     ruby238.vm.provision :shell, privileged: true, inline: $ruby2_install_script
+    ruby238.vm.provision :shell, privileged: false, inline: $vagrant_add_gemrc 
     ruby238.vm.provision :shell, privileged: true, inline: $clean_script
   end
 end

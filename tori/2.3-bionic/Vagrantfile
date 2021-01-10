@@ -24,26 +24,29 @@ Vagrant.configure("2") do |config|
 
     echo "deb http://opensource.wandisco.com/ubuntu `lsb_release -cs` svn19" >> /etc/apt/sources.list.d/subversion19.list
     curl -sS http://opensource.wandisco.com/wandisco-debian.gpg | apt-key add -
-    apt-get update && apt-get install -y subversion
-    svn co --non-interactive --no-auth-cache http://192.168.50.164/svn/derberus/trunk /opt/derberus
+    apt-get update && apt-get install -yq subversion
+    svn co --non-interactive --no-auth-cache --quiet http://192.168.50.164/svn/derberus/trunk /opt/derberus
     chown -R vagrant /opt/derberus
     sed -i 's/Toriredis/localhost/g' /opt/derberus/config/settings.yml
     echo "*** SVN client installed and checkout!"
 SCRIPT
-  $nginx_configuration_script = <<-SCRIPT
-
+  $nginx_config_script = <<-SCRIPT
+    echo "Current user: [`whoami`], Start Nginx config..."
     export PASSENGERROOT=`passenger-config --root`
     export RUBYBIN=`which ruby`
 
-    echo "Current user: [`whoami`], Ruby version: `ruby -v`, GEM_HOME: `echo $GEM_HOME`..."
-
     mkdir -p /opt/nginx/server.d /opt/nginx/location.d
     cp /home/vagrant/server.d/*       /opt/nginx/server.d/
+    rm /home/vagrant/server.d/yakitory.conf
     cp /home/vagrant/location.d/*     /opt/nginx/location.d/
+    rm /opt/nginx/server.d/yakitory.conf
 
-    # cd /opt/yakitory
+    #mkdir -p /opt/derberus/public/data/tmp_uploads /opt/derberus/public/data/tmp_docs
+    mkdir -p /opt/derberus/public/data/tmp_uploads
+    rm /opt/derberus/Gemfile
+
+    # cd /opt/derberus
     # /opt/nginx/sbin/nginx -c /opt/nginx/conf/nginx.conf && QUEUES=* rake resque:work
-
     echo "*** Nginx configuation done."
 SCRIPT
   $clean_script = <<-SCRIPT
@@ -53,16 +56,40 @@ SCRIPT
     sudo rm -f /EMPTY
     cat /dev/null > ~/.bash_history && history -c && exit
 SCRIPT
-$gem_install_script = <<-SCRIPT
+  $gem_install_script = <<-SCRIPT
     # . /etc/profile.d/rbenv.sh
-    echo "Current user: [`whoami`], Ruby version: `ruby -v`, GEM_HOME: `echo $GEM_HOME`..."
+    echo "Current user: [`whoami`], Ruby version: `ruby -v`, Gem(s) start install.."
+
+    #sudo -H -u root /bin/bash << 'SCRIPT' # no need this.
+    echo 'gem: --no-document' > ~/.gemrc # no need --user-install
 
     gem install dependencies -v 0.0.9
+    gem install sinatra -v 2.1.0
+    gem install sinatra-contrib -v 2.1.0
+    gem install redis -v 4.2.5
+    gem install redis-namespace -v 1.6.0
+
+    echo "*** Gem(s) installed."
 SCRIPT
+
+  $vagrant_add_gemrc = <<-EOF
+    echo "Current user: [`whoami`], Ruby version: `ruby -v`..."
+    sudo -H -u vagrant /bin/bash << 'SCRIPT'
+      # echo 'gem: --user-install --no-rdoc --no-ri' > ~/.gemrc  
+      echo 'gem: --user-install --no-document' > ~/.gemrc
+      echo 'cd /opt/derberus' >> ~/.bashrc
+SCRIPT
+  echo "*** Generate add [gemrc] for vagrant is done."
+EOF
 
   config.vm.provision "file", source: "entrypoint.sh", destination: "$HOME/"  
   config.vm.provision "file", source: "location.d/default.conf", destination: "$HOME/location.d/"
-  config.vm.provision "file", source: "server.d/yakitory.conf", destination: "$HOME/server.d/"
+  #config.vm.provision "file", source: "server.d/yakitory.conf", destination: "$HOME/server.d/"
+  config.vm.provision "file", source: "server.d/derberus.conf", destination: "$HOME/server.d/"
+
+  # unoconvd ?
+  config.vm.provision "file", source: "provision/unoconvd", destination: "$HOME/"
+
   # test file for Development
   config.vm.provision "file", source: "test.docx", destination: "$HOME/"
   config.vm.provision "file", source: "docker.docx", destination: "$HOME/"
@@ -71,19 +98,29 @@ SCRIPT
   config.vm.provision "shell", inline: <<-SHELL
     sudo apt-get update -q
     sudo apt-get install -yq redis unoconv
-    #sudo update-rc.d redis-server enable
+    #sudo update-rc.d redis-server enable # no need this.
 
     sudo timedatectl set-timezone Asia/Taipei
+    unoconv --version # smoke test
   SHELL
 
-  config.vm.define "tory2" do|tory23bionic|
-    tory23bionic.vm.provision :shell, inline: <<-SHELL
-      #echo "Current user: [`whoami`], deal with Yakitori..."
-    SHELL
-    tory23bionic.vm.provision :shell, privileged: true, inline: $svn_checkout_script
-    tory23bionic.vm.provision :shell, privileged: true, inline: $nginx_configuration_script
-    tory23bionic.vm.provision :shell, privileged: true, inline: $gem_install_script
+  config.vm.define "tory2" do|tory2bionic|
+#     tory2bionic.vm.provision :shell, inline: <<-SHELL
+#       echo "Current user: [`whoami`], in the SHELL..."
+#       sudo -H -u vagrant /bin/bash << 'SCRIPT'
+#         echo "Current user: [`whoami`], deal with Derberus ..."
+#         echo 'gem: --user-install --no-document' > ~/.gemrc
+# SCRIPT
+#       echo "*** Derberus: Generate ~/.gemrc done."
+#  RAILS_ENV=development QUEUES=* rake resque:work --trace
+#  curl -i -XPOST -F 'access_key=xxx' 'http://localhost/api/clients/1/docs/upload' -F 'filepath=@docker.docx'
+#     SHELL
+
+    tory2bionic.vm.provision :shell, privileged: true, inline: $svn_checkout_script
+    tory2bionic.vm.provision :shell, privileged: true, inline: $nginx_config_script
+    tory2bionic.vm.provision :shell, privileged: false, inline: $vagrant_add_gemrc
+    tory2bionic.vm.provision :shell, privileged: true, inline: $gem_install_script
     #tory23bionic.vm.provision :shell, privileged: true, inline: $clean_script # The dev machine, no need clean?
-    tory23bionic.vm.provision :shell, path: "provision/unoconv.sh", privileged: true
+    tory2bionic.vm.provision :shell, path: "provision/unoconv.sh", privileged: true
   end
 end
