@@ -47,6 +47,7 @@ SCRIPT
 
     # cd /opt/derberus
     # /opt/nginx/sbin/nginx -c /opt/nginx/conf/nginx.conf && QUEUES=* rake resque:work
+    service mvideo2 restart
     echo "*** Nginx configuation done."
 SCRIPT
   $clean_script = <<-SCRIPT
@@ -97,7 +98,7 @@ EOF
 
   config.vm.provision "shell", inline: <<-SHELL
     sudo apt-get update -q
-    sudo apt-get install -yq redis unoconv
+    sudo apt-get install -yq redis openjdk-8-jre-headless unoconv
     #sudo update-rc.d redis-server enable # no need this.
 
     sudo timedatectl set-timezone Asia/Taipei
